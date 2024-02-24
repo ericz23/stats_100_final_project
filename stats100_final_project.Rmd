@@ -1,0 +1,88 @@
+---
+title: "stats100_project_update"
+output:
+  word_document: default
+  pdf_document: default
+date: "2024-02-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+clutch_data_20_21 <- read.csv("player_clutch_2020-2021.csv")
+regular_season_data_20_21 <- read.csv("player_regular_season_2020-2021.csv")
+
+clutch_data_20_21 <- mutate(clutch_data_20_21, clutch_PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
+
+regular_season_data_20_21 <- mutate(regular_season_data_20_21, PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
+
+full_20_21_df <- inner_join(clutch_data_20_21, regular_season_data_20_21, by = "PLAYER_ID")
+
+updated_20_21_df <- full_20_21_df[full_20_21_df$GP.x * full_20_21_df$MIN.x >= 30, ]
+```
+
+```{r}
+library(ggplot2)
+
+model <- lm(clutch_PER ~ PER, data = updated_20_21_df)
+
+summary_model <- summary(model)
+
+r_squared <- summary_model$r.squared
+
+ggplot(updated_20_21_df, aes(x = PER, y = clutch_PER)) +
+  geom_point() +  # Add points for the scatter plot
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
+  labs(x = "PER", y = "clutch_PER", title = "Scatter plot of PER vs clutch_PER")
+```
+
+```{r}
+updated_20_21_df <- mutate(updated_20_21_df, clutch_elevation = clutch_PER - PER)
+
+# Fit multiple linear regression model
+model <- lm(clutch_elevation ~ AGE.y + FG_PCT.y + FG3_PCT.y + FT_PCT.y + TOV.y + PF.y + OREB.y , data = updated_20_21_df)
+
+# Summarize the model
+summary_model <- summary(model)
+
+r_squared <- summary_model$r.squared
+
+updated_20_21_df$predicted_clutch_elevation <- predict(model)
+
+# Create scatter plot matrix with fitted values
+ggplot(updated_20_21_df, aes(x = predicted_clutch_elevation, y = clutch_elevation)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red")  + 
+  labs(x = "Predicted Clutch Elevation", y = "Observed Clutch Elevation") 
+```
+
+
+```{r}
+model <- lm(clutch_elevation ~ FT_PCT.y, data = updated_20_21_df)
+
+summary_model <- summary(model)
+
+r_squared <- summary_model$r.squared
+
+ggplot(updated_20_21_df, aes(x = FT_PCT.y, y = clutch_elevation)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
+  labs(x = "Regular Season Free Throw Percent", y = "Clutch Elevation", title = "Scatter plot of Regular Season Free Throw Percent vs. Clutch Elevation")
+
+```
+
+```{r}
+model <- lm(clutch_elevation ~ FG3_PCT.y, data = updated_20_21_df)
+
+summary_model <- summary(model)
+
+r_squared <- summary_model$r.squared
+
+ggplot(updated_20_21_df, aes(x = FG3_PCT.y, y = clutch_elevation)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
+  labs(x = "Regular Season Three Point Percent", y = "Clutch Elevation", title = "Scatter plot of Regular Season Three Point Percent vs. Clutch Elevation")
+```
