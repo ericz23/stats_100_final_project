@@ -12,77 +12,533 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(dplyr)
+library(purrr)
 clutch_data_20_21 <- read.csv("player_clutch_2020-2021.csv")
 regular_season_data_20_21 <- read.csv("player_regular_season_2020-2021.csv")
+# TODO: add data from other seasons and re-run analysis
+clutch_data_18_19 <- read.csv("player_clutch_2018-2019.csv") 
+regular_season_data_18_19 <- read.csv("player_regular_season_2018-2019.csv")
+clutch_data_19_20 <- read.csv("player_clutch_2019-2020.csv")
+regular_season_data_19_20 <- read.csv("player_regular_season_2019-2020.csv")
+clutch_data_21_22 <- read.csv("player_clutch_2021-2022.csv")
+regular_season_data_21_22 <- read.csv("player_regular_season_2021-2022.csv")
+clutch_data_22_23 <- read.csv("player_clutch_2022-2023.csv")
+regular_season_data_22_23 <- read.csv("player_regular_season_2022-2023.csv")
+```
 
-clutch_data_20_21 <- mutate(clutch_data_20_21, clutch_PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
+```{r}
+clutch_data_18_19 <- clutch_data_18_19 %>% select(-(contains('RANK') | contains('FANTASY')))
+clutch_data_19_20 <- clutch_data_19_20 %>% select(-(contains('RANK') | contains('FANTASY')))
+clutch_data_20_21 <- clutch_data_20_21 %>% select(-(contains('RANK') | contains('FANTASY')))
+clutch_data_21_22 <- clutch_data_21_22 %>% select(-(contains('RANK') | contains('FANTASY')))
+clutch_data_22_23 <- clutch_data_22_23 %>% select(-(contains('RANK') | contains('FANTASY')))
 
-regular_season_data_20_21 <- mutate(regular_season_data_20_21, PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
 
-full_20_21_df <- inner_join(clutch_data_20_21, regular_season_data_20_21, by = "PLAYER_ID")
+datasets_clutch <- list(clutch_data_18_19, clutch_data_19_20 , clutch_data_20_21, clutch_data_21_22, clutch_data_22_23)
+all_seasons_clutch <- reduce(datasets_clutch, ~inner_join(.x, .y, by = "PLAYER_ID"))
 
-updated_20_21_df <- full_20_21_df[full_20_21_df$GP.x * full_20_21_df$MIN.x >= 30, ]
+all_seasons_clutch <- all_seasons_clutch %>%
+  mutate(
+    total_W = W + W.x + W.x.x + W.y + W.y.y,
+    total_L = L + L.x + L.x.x + L.y + L.y.y,
+    total_GP = GP + GP.x + GP.x.x + GP.y + GP.y.y,
+    AGE = (AGE + AGE.x + AGE.x.x + AGE.y + AGE.y.y) / 5
+  )
+
+weighted_avg <- function(seasons_data, stat_name) {
+  weights <- seasons_data %>% select(GP, GP.x, GP.x.x, GP.y, GP.y.y) %>% as.matrix()
+  pattern <- paste0("^", stat_name, "(\\.x|\\.x\\.x|\\.y|\\.y\\.y)?$")
+  stats <- seasons_data %>% select(matches(pattern)) %>% as.matrix()
+  weighted_mean <- rowSums(weights * stats, na.rm = TRUE) / rowSums(weights, na.rm = TRUE)
+  return(weighted_mean)
+}
+
+all_seasons_clutch$W_PCT <- weighted_avg(all_seasons_clutch, "W_PCT")
+all_seasons_clutch$W_MIN <- weighted_avg(all_seasons_clutch, "MIN")
+all_seasons_clutch$FGM <- weighted_avg(all_seasons_clutch, "FGM")
+all_seasons_clutch$FGA <- weighted_avg(all_seasons_clutch, "FGA")
+all_seasons_clutch$FG_PCT <- weighted_avg(all_seasons_clutch, "FG_PCT")
+all_seasons_clutch$FG3M <- weighted_avg(all_seasons_clutch, "FG3M")
+all_seasons_clutch$FG3A <- weighted_avg(all_seasons_clutch, "FG3A")
+all_seasons_clutch$FG3_PCT <- weighted_avg(all_seasons_clutch, "FG3_PCT")
+all_seasons_clutch$FTM <- weighted_avg(all_seasons_clutch, "FTM")
+all_seasons_clutch$FTA <- weighted_avg(all_seasons_clutch, "FTA")
+all_seasons_clutch$FT_PCT <- weighted_avg(all_seasons_clutch, "FT_PCT")
+all_seasons_clutch$OREB <- weighted_avg(all_seasons_clutch, "OREB")
+all_seasons_clutch$DREB <- weighted_avg(all_seasons_clutch, "DREB")
+all_seasons_clutch$REB <- weighted_avg(all_seasons_clutch, "REB")
+all_seasons_clutch$AST <- weighted_avg(all_seasons_clutch, "AST")
+all_seasons_clutch$TOV <- weighted_avg(all_seasons_clutch, "TOV")
+all_seasons_clutch$STL <- weighted_avg(all_seasons_clutch, "STL")
+all_seasons_clutch$BLK <- weighted_avg(all_seasons_clutch, "BLK")
+all_seasons_clutch$PF <- weighted_avg(all_seasons_clutch, "PF")
+all_seasons_clutch$PFD <- weighted_avg(all_seasons_clutch, "PFD")
+all_seasons_clutch$PTS <- weighted_avg(all_seasons_clutch, "PTS")
+all_seasons_clutch$PLUS_MINUS <- weighted_avg(all_seasons_clutch, "PLUS_MINUS")
+
+all_seasons_clutch <- all_seasons_clutch %>%
+  select('PLAYER_ID', 'PLAYER_NAME', 'TEAM_ID', 'TEAM_ABBREVIATION', 'AGE', 'total_GP', 'total_W', 'total_L', "W_PCT", "MIN", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT", "OREB", "DREB", "REB", "AST", "TOV", "STL", "BLK", "PF", "PFD", "PTS", "PLUS_MINUS")
+
+```
+
+```{r}
+regular_season_data_18_19 <- regular_season_data_18_19 %>% select(-(contains('RANK') | contains('FANTASY')))
+regular_season_data_19_20 <- regular_season_data_19_20 %>% select(-(contains('RANK') | contains('FANTASY')))
+regular_season_data_20_21 <- regular_season_data_20_21 %>% select(-(contains('RANK') | contains('FANTASY')))
+regular_season_data_21_22 <- regular_season_data_21_22 %>% select(-(contains('RANK') | contains('FANTASY')))
+regular_season_data_22_23 <- regular_season_data_22_23 %>% select(-(contains('RANK') | contains('FANTASY')))
+
+
+datasets_regular <- list(regular_season_data_18_19, regular_season_data_19_20 , regular_season_data_20_21, regular_season_data_21_22, regular_season_data_22_23)
+all_regular_seasons <- reduce(datasets_regular, ~inner_join(.x, .y, by = "PLAYER_ID"))
+
+all_regular_seasons <- all_regular_seasons %>%
+  mutate(
+    total_W = W + W.x + W.x.x + W.y + W.y.y,
+    total_L = L + L.x + L.x.x + L.y + L.y.y,
+    total_GP = GP + GP.x + GP.x.x + GP.y + GP.y.y,
+    AGE = (AGE + AGE.x + AGE.x.x + AGE.y + AGE.y.y) / 5
+  )
+
+weighted_avg <- function(seasons_data, stat_name) {
+  weights <- seasons_data %>% select(GP, GP.x, GP.x.x, GP.y, GP.y.y) %>% as.matrix()
+  pattern <- paste0("^", stat_name, "(\\.x|\\.x\\.x|\\.y|\\.y\\.y)?$")
+  stats <- seasons_data %>% select(matches(pattern)) %>% as.matrix()
+  weighted_mean <- rowSums(weights * stats, na.rm = TRUE) / rowSums(weights, na.rm = TRUE)
+  return(weighted_mean)
+}
+
+all_regular_seasons$W_PCT <- weighted_avg(all_regular_seasons, "W_PCT")
+all_regular_seasons$MIN <- weighted_avg(all_regular_seasons, "MIN")
+all_regular_seasons$FGM <- weighted_avg(all_regular_seasons, "FGM")
+all_regular_seasons$FGA <- weighted_avg(all_regular_seasons, "FGA")
+all_regular_seasons$FG_PCT <- weighted_avg(all_regular_seasons, "FG_PCT")
+all_regular_seasons$FG3M <- weighted_avg(all_regular_seasons, "FG3M")
+all_regular_seasons$FG3A <- weighted_avg(all_regular_seasons, "FG3A")
+all_regular_seasons$FG3_PCT <- weighted_avg(all_regular_seasons, "FG3_PCT")
+all_regular_seasons$FTM <- weighted_avg(all_regular_seasons, "FTM")
+all_regular_seasons$FTA <- weighted_avg(all_regular_seasons, "FTA")
+all_regular_seasons$FT_PCT <- weighted_avg(all_regular_seasons, "FT_PCT")
+all_regular_seasons$OREB <- weighted_avg(all_regular_seasons, "OREB")
+all_regular_seasons$DREB <- weighted_avg(all_regular_seasons, "DREB")
+all_regular_seasons$REB <- weighted_avg(all_regular_seasons, "REB")
+all_regular_seasons$AST <- weighted_avg(all_regular_seasons, "AST")
+all_regular_seasons$TOV <- weighted_avg(all_regular_seasons, "TOV")
+all_regular_seasons$STL <- weighted_avg(all_regular_seasons, "STL")
+all_regular_seasons$BLK <- weighted_avg(all_regular_seasons, "BLK")
+all_regular_seasons$PF <- weighted_avg(all_regular_seasons, "PF")
+all_regular_seasons$PFD <- weighted_avg(all_regular_seasons, "PFD")
+all_regular_seasons$PTS <- weighted_avg(all_regular_seasons, "PTS")
+all_regular_seasons$PLUS_MINUS <- weighted_avg(all_regular_seasons, "PLUS_MINUS")
+
+all_regular_seasons <- all_regular_seasons %>%
+  select('PLAYER_ID', 'PLAYER_NAME', 'TEAM_ID', 'TEAM_ABBREVIATION', 'AGE', 'total_GP', 'total_W', 'total_L', "W_PCT", "MIN", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT", "OREB", "DREB", "REB", "AST", "TOV", "STL", "BLK", "PF", "PFD", "PTS", "PLUS_MINUS")
+
+```
+
+
+```{r}
+all_seasons_clutch <- mutate(all_seasons_clutch, clutch_PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
+
+all_regular_seasons <- mutate(all_regular_seasons, PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
+
+full_df <- inner_join(all_seasons_clutch, all_regular_seasons, by = "PLAYER_ID")
+
+updated_df <- full_df[full_df$total_GP.x * full_df$MIN.x >= 180, ]
 ```
 
 ```{r}
 library(ggplot2)
 
-model <- lm(clutch_PER ~ PER, data = updated_20_21_df)
+model <- lm(clutch_PER ~ PER, data = updated_df)
 
 summary_model <- summary(model)
 
 r_squared <- summary_model$r.squared
+print(r_squared)
 
-ggplot(updated_20_21_df, aes(x = PER, y = clutch_PER)) +
+ggplot(updated_df, aes(x = PER, y = clutch_PER)) +
   geom_point() +  # Add points for the scatter plot
   geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
-  labs(x = "PER", y = "clutch_PER", title = "Scatter plot of PER vs clutch_PER")
+  labs(x = "PER", y = "Clutch PER", title = "Regular Season PER vs Clutch Time PER") + 
+  theme(plot.title = element_text(hjust = 0.5)) 
 ```
 
 ```{r}
-updated_20_21_df <- mutate(updated_20_21_df, clutch_elevation = clutch_PER - PER)
+updated_df <- mutate(updated_df, clutch_elevation = clutch_PER - PER)
+updated_df <- mutate(updated_df, clutch_elevator = ifelse(clutch_elevation > 0, 1, 0))
+```
 
+Visualizing clutch elevation:
+```{r}
+
+mean_value = mean(updated_df$clutch_elevation)
+sd_value = sd(updated_df$clutch_elevation)
+
+ggplot(updated_df, aes(x = clutch_elevation)) + 
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") + # Adjust binwidth as needed
+  ggtitle("Histogram of Clutch Elevation") + 
+  xlab("Clutch Elevation") + 
+  ylab("Frequency") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = Inf, y = Inf, label = paste("Mean =", round(mean_value, 2)), hjust = 1.1,vjust = 3, color="black", size = 4.5) +
+  annotate("text", x = Inf, y = Inf, label = paste("SD =", round(sd_value, 2)), hjust = 1.1,vjust = 1.5, color="black", size = 4.5) +
+  theme(plot.margin = margin(5.5, 40, 5.5, 5.5))
+
+print(median(updated_df$clutch_elevation))
+
+highest_clutch_elevation_players <- updated_df %>%
+  arrange(desc(clutch_elevation)) %>%
+  head(6)
+
+lowest_clutch_elevation_players <- updated_df %>%
+  arrange(clutch_elevation) %>%
+  head(6)
+
+highest_clutch_PER_players <- updated_df %>%
+  arrange(desc(clutch_PER)) %>%
+  head(10)
+
+highest_clutch_players <- updated_df %>%
+  arrange(desc(clutch_PER + clutch_elevation)) %>%
+  head(10)
+
+# Combine these two subsets
+selected_players <- bind_rows(lowest_clutch_elevation_players, highest_clutch_elevation_players)
+
+# Add a new column to indicate if they are in the lowest or highest group for coloring
+selected_players$group <- rep(c("Lowest", "Highest"), each = 6)
+
+# Plotting
+ggplot(selected_players, aes(x = reorder(PLAYER_NAME.x, clutch_elevation), y = clutch_elevation, fill = group)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  scale_fill_manual(values = c("Lowest" = "red", "Highest" = "green")) +
+  coord_flip() + # Flip coordinates to make the names vertical (alternative to making them diagonal)
+  theme(axis.text.y = element_text(angle = 45, hjust = 1)) + # Adjust text angle and alignment
+  labs(title = "Players with the Highest and Lowest Clutch Elevation", x = "Player Name", y = "Clutch Elevation") + 
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+## Finding: on average, players tends to perform worse in the clutch. Normally distributed centered around a slightly negative mean. 
+
+```{r}
 # Fit multiple linear regression model
-model <- lm(clutch_elevation ~ AGE.y + FG_PCT.y + FG3_PCT.y + FT_PCT.y + TOV.y + PF.y + OREB.y , data = updated_20_21_df)
+full_model <- lm(clutch_elevation ~ AGE.y + FG_PCT.y + FG3_PCT.y + FT_PCT.y + TOV.y + PF.y + OREB.y + W_PCT.y + MIN.y + FGA.y + FG3A.y + FTA.y + DREB.y + AST.y + STL.y + BLK.y + PLUS_MINUS.y, data = updated_df)
 
 # Summarize the model
-summary_model <- summary(model)
+summary_model <- summary(full_model)
 
 r_squared <- summary_model$r.squared
+adj_r_squared <- summary_model$adj.r.squared
+print(r_squared)
+print(summary_model)
 
-updated_20_21_df$predicted_clutch_elevation <- predict(model)
+updated_df$predicted_clutch_elevation <- predict(full_model)
 
 # Create scatter plot matrix with fitted values
-ggplot(updated_20_21_df, aes(x = predicted_clutch_elevation, y = clutch_elevation)) +
+ggplot(updated_df, aes(x = predicted_clutch_elevation, y = clutch_elevation)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, color = "red")  + 
-  labs(x = "Predicted Clutch Elevation", y = "Observed Clutch Elevation") 
+  labs(x = "Predicted Clutch Elevation", y = "Observed Clutch Elevation", title = "Predicted vs Observed Clutch Elevation") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = Inf, y = Inf, label = paste("Multiple R-squared =", round(r_squared, 3)), 
+           hjust = 1.1, vjust = 2, color = "black") +
+  annotate("text", x = Inf, y = Inf, label = paste("Adjusted R-squared =", round(adj_r_squared, 3)), 
+           hjust = 1.1, vjust = 3.5, color = "black") +
+  theme(plot.margin = margin(5.5, 40, 5.5, 5.5)) 
+```
+Performing feature selection with stepwise regression
+```{r}
+library(MASS)
+
+stepModel <- stepAIC(full_model, direction = "both", trace = FALSE)
+summary(stepModel)
+```
+
+```{r}
+library(caTools)
+library(caret)
+library(Metrics)
+library(MASS)
+
+set.seed(1) 
+splitIndex <- createDataPartition(updated_df$clutch_elevation, p = .75, list = FALSE)
+train_data <- updated_df[splitIndex,]
+test_data <- updated_df[-splitIndex,]
+
+
+# Fit multiple linear regression model
+full_model <- lm(clutch_elevation ~ AGE.y + FG_PCT.y + FG3_PCT.y + FT_PCT.y + TOV.y + PF.y + OREB.y + W_PCT.y + MIN.y + FGA.y + FG3A.y + FTA.y + DREB.y + AST.y + STL.y + BLK.y + PLUS_MINUS.y, data = train_data)
+
+stepModel <- stepAIC(full_model, direction = "both", trace = FALSE)
+
+predictions <- predict(stepModel, newdata=test_data)
+
+rmse_value <- rmse(test_data$clutch_elevation, predictions)
+
+r_squared <- summary(stepModel)$r.squared
+adj_r_squared <- summary_model$adj.r.squared
+print(summary(stepModel))
+
+test_data$predicted_clutch_elevation <- predictions
+
+# Create scatter plot matrix with fitted values
+ggplot(test_data, aes(x = predicted_clutch_elevation, y = clutch_elevation)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "red")  + 
+  labs(x = "Predicted Clutch Elevation", y = "Observed Clutch Elevation", title = "Predicted vs. Observed Clutch Elevation on Test Set") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = Inf, y = Inf, label = paste("Multiple R-squared =", round(r_squared, 3)), 
+           hjust = 1.1, vjust = 5.1, color = "black") +
+  annotate("text", x = Inf, y = Inf, label = paste("Adjusted R-squared =", round(adj_r_squared, 3)), 
+           hjust = 1.1, vjust = 6.6, color = "black") +
+  theme(plot.margin = margin(5.5, 40, 5.5, 5.5)) 
+```
+
+# Major Finding: free throw percentage is the statistic that is consistently most signficiantly positively correlated with clutch elevation. Though overall predicitve power is still very low, seems that free throw pct is the closest proxy. 
+
+
+```{r}
+model_ft <- lm(clutch_elevation ~ FT_PCT.y, data = updated_df)
+
+summary_model <- summary(model_ft)
+
+r_squared <- summary_model$r.squared
+
+cor_coef = cor(updated_df$FT_PCT.y, updated_df$clutch_elevation)
+
+ggplot(updated_df, aes(x = FT_PCT.y, y = clutch_elevation)) +
+  geom_point() +  
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
+  labs(x = "Regular Season Free Throw Percent", y = "Clutch Elevation", title = "Free Throw Percent vs. Clutch Elevation") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = Inf, y = Inf, label = paste("Correlation =", round(cor_coef, 3)), 
+           hjust = 4.35, vjust = 2, color = "black", size = 4.5)
+
+```
+
+
+
+# Maybe something with logistic classification for clutch riser/faller/stays the same
+```{r}
+# Splitting data
+set.seed(1) # For reproducibility
+splitIndex <- createDataPartition(updated_df$clutch_elevator, p = .75, list = FALSE)
+trainData <- updated_df[splitIndex,]
+testData <- updated_df[-splitIndex,]
+
+classifier_model <- glm(clutch_elevator ~ AGE.y + FG_PCT.y + FG3_PCT.y + FT_PCT.y + TOV.y + PF.y + OREB.y + W_PCT.y + MIN.y + FGA.y + FG3A.y + FTA.y + DREB.y + AST.y + STL.y + BLK.y + PLUS_MINUS.y, data = trainData, family = binomial)
+
+predictions <- predict(classifier_model, newdata = testData, type = "response")
+predictedClass <- ifelse(predictions > 0.5, 1, 0)
+
+correct_predictions <- predictedClass == testData$clutch_elevator
+accuracy <- sum(correct_predictions) / length(correct_predictions)
+print(accuracy)
+print(summary(classifier_model))
+
+classifier_stepModel <- stepAIC(classifier_model, direction = "both", trace = FALSE)
+
+print(summary(classifier_stepModel))
+
+predictions <- predict(classifier_stepModel, newdata = testData, type = "response")
+predictedClass <- ifelse(predictions > 0.5, 1, 0)
+correct_predictions <- predictedClass == testData$clutch_elevator
+accuracy <- sum(correct_predictions) / length(correct_predictions)
+print(accuracy)
+```
+
+
+
+
+
+
+```{r}
+playoffs_clutch_data_18_19 <- read.csv("playoffs_clutch_2018-2019.csv") 
+playoffs_data_18_19 <- read.csv("playoffs_2018-2019.csv")
+playoffs_clutch_data_19_20 <- read.csv("playoffs_clutch_2019-2020.csv")
+playoffs_data_19_20 <- read.csv("playoffs_2019-2020.csv")
+playoffs_clutch_data_20_21 <- read.csv("playoffs_clutch_2020-2021.csv")
+playoffs_data_20_21 <- read.csv("playoffs_2020-2021.csv")
+playoffs_clutch_data_21_22 <- read.csv("playoffs_clutch_2021-2022.csv")
+playoffs_data_21_22 <- read.csv("playoffs_2021-2022.csv")
+playoffs_clutch_data_22_23 <- read.csv("playoffs_clutch_2022-2023.csv")
+playoffs_data_22_23 <- read.csv("playoffs_2022-2023.csv")
+```
+
+```{r}
+playoffs_clutch_data_18_19 <- playoffs_clutch_data_18_19 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_clutch_data_19_20 <- playoffs_clutch_data_19_20 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_clutch_data_20_21 <- playoffs_clutch_data_20_21 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_clutch_data_21_22 <- playoffs_clutch_data_21_22 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_clutch_data_22_23 <- playoffs_clutch_data_22_23 %>% select(-(contains('RANK') | contains('FANTASY')))
+
+
+playoffs_datasets_clutch <- list(playoffs_clutch_data_18_19, playoffs_clutch_data_19_20 , playoffs_clutch_data_20_21, playoffs_clutch_data_21_22, playoffs_clutch_data_22_23)
+all_playoffs_clutch <- reduce(playoffs_datasets_clutch, ~inner_join(.x, .y, by = "PLAYER_ID"))
+
+all_playoffs_clutch <- all_playoffs_clutch %>%
+  mutate(
+    total_W = W + W.x + W.x.x + W.y + W.y.y,
+    total_L = L + L.x + L.x.x + L.y + L.y.y,
+    total_GP = GP + GP.x + GP.x.x + GP.y + GP.y.y,
+    AGE = (AGE + AGE.x + AGE.x.x + AGE.y + AGE.y.y) / 5
+  )
+
+weighted_avg <- function(seasons_data, stat_name) {
+  weights <- seasons_data %>% select(GP, GP.x, GP.x.x, GP.y, GP.y.y) %>% as.matrix()
+  pattern <- paste0("^", stat_name, "(\\.x|\\.x\\.x|\\.y|\\.y\\.y)?$")
+  stats <- seasons_data %>% select(matches(pattern)) %>% as.matrix()
+  weighted_mean <- rowSums(weights * stats, na.rm = TRUE) / rowSums(weights, na.rm = TRUE)
+  return(weighted_mean)
+}
+
+all_playoffs_clutch$W_PCT <- weighted_avg(all_playoffs_clutch, "W_PCT")
+all_playoffs_clutch$W_MIN <- weighted_avg(all_playoffs_clutch, "MIN")
+all_playoffs_clutch$FGM <- weighted_avg(all_playoffs_clutch, "FGM")
+all_playoffs_clutch$FGA <- weighted_avg(all_playoffs_clutch, "FGA")
+all_playoffs_clutch$FG_PCT <- weighted_avg(all_playoffs_clutch, "FG_PCT")
+all_playoffs_clutch$FG3M <- weighted_avg(all_playoffs_clutch, "FG3M")
+all_playoffs_clutch$FG3A <- weighted_avg(all_playoffs_clutch, "FG3A")
+all_playoffs_clutch$FG3_PCT <- weighted_avg(all_playoffs_clutch, "FG3_PCT")
+all_playoffs_clutch$FTM <- weighted_avg(all_playoffs_clutch, "FTM")
+all_playoffs_clutch$FTA <- weighted_avg(all_playoffs_clutch, "FTA")
+all_playoffs_clutch$FT_PCT <- weighted_avg(all_playoffs_clutch, "FT_PCT")
+all_playoffs_clutch$OREB <- weighted_avg(all_playoffs_clutch, "OREB")
+all_playoffs_clutch$DREB <- weighted_avg(all_playoffs_clutch, "DREB")
+all_playoffs_clutch$REB <- weighted_avg(all_playoffs_clutch, "REB")
+all_playoffs_clutch$AST <- weighted_avg(all_playoffs_clutch, "AST")
+all_playoffs_clutch$TOV <- weighted_avg(all_playoffs_clutch, "TOV")
+all_playoffs_clutch$STL <- weighted_avg(all_playoffs_clutch, "STL")
+all_playoffs_clutch$BLK <- weighted_avg(all_playoffs_clutch, "BLK")
+all_playoffs_clutch$PF <- weighted_avg(all_playoffs_clutch, "PF")
+all_playoffs_clutch$PFD <- weighted_avg(all_playoffs_clutch, "PFD")
+all_playoffs_clutch$PTS <- weighted_avg(all_playoffs_clutch, "PTS")
+all_playoffs_clutch$PLUS_MINUS <- weighted_avg(all_playoffs_clutch, "PLUS_MINUS")
+
+all_playoffs_clutch <- all_playoffs_clutch %>%
+  select('PLAYER_ID', 'PLAYER_NAME', 'TEAM_ID', 'TEAM_ABBREVIATION', 'AGE', 'total_GP', 'total_W', 'total_L', "W_PCT", "MIN", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT", "OREB", "DREB", "REB", "AST", "TOV", "STL", "BLK", "PF", "PFD", "PTS", "PLUS_MINUS")
+
+```
+
+```{r}
+playoffs_data_18_19 <- playoffs_data_18_19 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_data_19_20 <- playoffs_data_19_20 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_data_20_21 <- playoffs_data_20_21 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_data_21_22 <- playoffs_data_21_22 %>% select(-(contains('RANK') | contains('FANTASY')))
+playoffs_data_22_23 <- playoffs_data_22_23 %>% select(-(contains('RANK') | contains('FANTASY')))
+
+
+datasets_playoffs<- list(playoffs_data_18_19, playoffs_data_19_20 , playoffs_data_20_21, playoffs_data_21_22, playoffs_data_22_23)
+all_playoffs <- reduce(datasets_playoffs, ~full_join(.x, .y, by = "PLAYER_ID"))
+
+all_playoffs <- all_playoffs %>%
+  mutate(
+    total_W = rowSums(select(., W, W.x, W.x.x, W.y, W.y.y), na.rm = TRUE),
+    total_L = rowSums(select(., L, L.x, L.x.x, L.y, L.y.y), na.rm = TRUE),
+    total_GP = rowSums(select(., GP, GP.x, GP.x.x, GP.y, GP.y.y), na.rm = TRUE),
+    AGE = rowMeans(select(., AGE, AGE.x, AGE.x.x, AGE.y, AGE.y.y), na.rm = TRUE),
+  )
+all_playoffs <- all_playoffs %>%
+  mutate(PLAYER_NAME = coalesce(PLAYER_NAME, PLAYER_NAME.x, PLAYER_NAME.y, PLAYER_NAME.x.x, PLAYER_NAME.y.y))
+
+weighted_avg <- function(seasons_data, stat_name) {
+  weights <- seasons_data %>% select(GP, GP.x, GP.x.x, GP.y, GP.y.y) %>% as.matrix()
+  pattern <- paste0("^", stat_name, "(\\.x|\\.x\\.x|\\.y|\\.y\\.y)?$")
+  stats <- seasons_data %>% select(matches(pattern)) %>% as.matrix()
+  weighted_mean <- rowSums(weights * stats, na.rm = TRUE) / rowSums(weights, na.rm = TRUE)
+  return(weighted_mean)
+}
+
+all_playoffs$W_PCT <- weighted_avg(all_playoffs, "W_PCT")
+all_playoffs$MIN <- weighted_avg(all_playoffs, "MIN")
+all_playoffs$FGM <- weighted_avg(all_playoffs, "FGM")
+all_playoffs$FGA <- weighted_avg(all_playoffs, "FGA")
+all_playoffs$FG_PCT <- weighted_avg(all_playoffs, "FG_PCT")
+all_playoffs$FG3M <- weighted_avg(all_playoffs, "FG3M")
+all_playoffs$FG3A <- weighted_avg(all_playoffs, "FG3A")
+all_playoffs$FG3_PCT <- weighted_avg(all_playoffs, "FG3_PCT")
+all_playoffs$FTM <- weighted_avg(all_playoffs, "FTM")
+all_playoffs$FTA <- weighted_avg(all_playoffs, "FTA")
+all_playoffs$FT_PCT <- weighted_avg(all_playoffs, "FT_PCT")
+all_playoffs$OREB <- weighted_avg(all_playoffs, "OREB")
+all_playoffs$DREB <- weighted_avg(all_playoffs, "DREB")
+all_playoffs$REB <- weighted_avg(all_playoffs, "REB")
+all_playoffs$AST <- weighted_avg(all_playoffs, "AST")
+all_playoffs$TOV <- weighted_avg(all_playoffs, "TOV")
+all_playoffs$STL <- weighted_avg(all_playoffs, "STL")
+all_playoffs$BLK <- weighted_avg(all_playoffs, "BLK")
+all_playoffs$PF <- weighted_avg(all_playoffs, "PF")
+all_playoffs$PFD <- weighted_avg(all_playoffs, "PFD")
+all_playoffs$PTS <- weighted_avg(all_playoffs, "PTS")
+all_playoffs$PLUS_MINUS <- weighted_avg(all_playoffs, "PLUS_MINUS")
+
+all_playoffs <- all_playoffs %>%
+  select('PLAYER_ID', 'PLAYER_NAME', 'TEAM_ID', 'TEAM_ABBREVIATION', 'AGE', 'total_GP', 'total_W', 'total_L', "W_PCT", "MIN", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT", "OREB", "DREB", "REB", "AST", "TOV", "STL", "BLK", "PF", "PFD", "PTS", "PLUS_MINUS")
+
 ```
 
 
 ```{r}
-model <- lm(clutch_elevation ~ FT_PCT.y, data = updated_20_21_df)
+all_playoffs_clutch <- mutate(all_playoffs_clutch, clutch_PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
 
-summary_model <- summary(model)
+all_playoffs <- mutate(all_playoffs, playoff_PER = (85.910 * FGM + 53.897 * STL + 51.757 * FG3M + 46.845 * FTM + 39.190 * BLK + 39.190 * OREB + 34.677 * AST + 14.707 * DREB - 17.174 * PF - 20.091 * (FTA-FTM) - 39.190 * (FGA -FGM) - 53.897 * TOV)/MIN)
 
-r_squared <- summary_model$r.squared
+all_playoffs <- all_playoffs %>%
+  filter(!is.na(playoff_PER))
 
-ggplot(updated_20_21_df, aes(x = FT_PCT.y, y = clutch_elevation)) +
-  geom_point() +  
+playoff_elevation_df <- inner_join(updated_df, all_playoffs, by = "PLAYER_ID")
+
+playoff_elevation_df <- playoff_elevation_df %>%
+    mutate(playoff_elevation = playoff_PER - PER.x)
+
+playoffs_df <- inner_join(all_playoffs_clutch, all_playoffs, by = "PLAYER_ID")
+
+playoffs_df <- playoffs_df[playoffs_df$total_GP.x * playoffs_df$MIN.x >= 20, ]
+
+cor_coef = cor(playoff_elevation_df$clutch_elevation, playoff_elevation_df$playoff_elevation)
+
+ggplot(playoff_elevation_df , aes(x = clutch_elevation, y = playoff_elevation)) +
+  geom_point() +  # Add points for the scatter plot
   geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
-  labs(x = "Regular Season Free Throw Percent", y = "Clutch Elevation", title = "Scatter plot of Regular Season Free Throw Percent vs. Clutch Elevation")
+  labs(x = "Regular Season Clutch Elevation", y = "Playoff Elevation", title = "Clutch Elevation vs. Playoff Elevation") + 
+  theme(plot.title = element_text(hjust = 0.5)) 
 
+mean_value = mean(playoff_elevation_df$playoff_elevation)
+sd_value = sd(playoff_elevation_df$playoff_elevation)
+
+ggplot(playoff_elevation_df, aes(x = playoff_elevation)) + 
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") + # Adjust binwidth as needed
+  ggtitle("Histogram of Playoff Elevation") + 
+  xlab("Playoff Elevation") + 
+  ylab("Frequency") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  annotate("text", x = Inf, y = Inf, label = paste("Mean =", round(mean_value, 2)), hjust = 1.1,vjust = 3, color="black", size = 4.5) +
+  annotate("text", x = Inf, y = Inf, label = paste("SD =", round(sd_value, 2)), hjust = 1.1,vjust = 1.5, color="black", size = 4.5) +
+  theme(plot.margin = margin(5.5, 40, 5.5, 5.5))
 ```
+
 
 ```{r}
-model <- lm(clutch_elevation ~ FG3_PCT.y, data = updated_20_21_df)
 
-summary_model <- summary(model)
+playoffs_and_regular_df <- inner_join(updated_df, playoffs_df, by = "PLAYER_ID")
+playoffs_and_regular_df <- playoffs_and_regular_df %>% 
+  mutate(playoff_elevation = PER.y - PER.x) %>%
+  mutate(clutch_playoff_elevation = clutch_PER.y - PER.x)
 
-r_squared <- summary_model$r.squared
+playoffs_and_regular_df %>%
+  select(PLAYER_NAME.x.x, playoff_elevation) %>%
+  arrange(desc(playoff_elevation))
 
-ggplot(updated_20_21_df, aes(x = FG3_PCT.y, y = clutch_elevation)) +
-  geom_point() +  
-  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add a line of best fit
-  labs(x = "Regular Season Three Point Percent", y = "Clutch Elevation", title = "Scatter plot of Regular Season Three Point Percent vs. Clutch Elevation")
+playoffs_and_regular_df %>%
+  select(PLAYER_NAME.x.x, clutch_playoff_elevation) %>%
+  arrange(desc(clutch_playoff_elevation))
+
 ```
+
+
+
+
+
+
+
